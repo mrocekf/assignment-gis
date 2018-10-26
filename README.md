@@ -20,8 +20,12 @@ Build a map-based application, which lets the user see geo-based data on a map a
 
 Fill in (either in English, or in Slovak):
 
-**Application description**: `<fill in>`
+**Application description**: 
+- Riziko povodne pre jednotlive Postcodes v UK (https://www.kaggle.com/getthedata/open-flood-risk-by-postcode)
+- Zakotvenia v UK pristavoch (https://www.kaggle.com/theflyingmunkey/uk-fleet-landings)
+Podla miest povedat ze celkove riziko povodni je sum rizik pre postcodes, pocet zakotveni je sucet zakotveni vsetkych pristavov v danom meste, a kde boli/neboli zakotvenia vzhladom na riziko povodne
+Moznost pridat nemocice, ze ked sa stane povoden v nejakom meste ze ako ich to velmi znici (https://www.kaggle.com/center-for-medicare-and-medicaid/hospital-ratings)
 
-**Data source**: `<fill in>`
+**Data source**: https://www.kaggle.com/getthedata/open-flood-risk-by-postcode, https://www.kaggle.com/theflyingmunkey/uk-fleet-landings, https://www.kaggle.com/center-for-medicare-and-medicaid/hospital-ratings
 
-**Technologies used**: `<fill in>`
+**Technologies used**: Laravel, (Angular), HTML + JS
