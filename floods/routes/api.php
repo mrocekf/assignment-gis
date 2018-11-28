@@ -17,9 +17,10 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::get('/test', 'MapsController@hospitals');
+Route::get('/floods-for-hospital', 'MapsController@floodsForHospital');
 Route::get('/hospitals/{cityId}', 'MapsController@hospitals');
-Route::get('/floods', 'MapsController@floods');
 Route::get('/floods/{cityId}', 'MapsController@floods');
-Route::get('/ports-of-landing', 'MapsController@portsOfLanding');
 Route::get('/cities', 'MapsController@cities');
+
+
+Route::get('/ports-of-landing', 'MapsController@portsOfLanding');

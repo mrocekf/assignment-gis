@@ -37,7 +37,7 @@ class MapsController extends Controller
         $hospitals = DB::select(
             'WITH tmp_floods AS ' 
             .'(SELECT f.geom AS flood_point, f.prob, f.id FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom) WHERE c.id = ? AND f.prob = ?) '
-            . 'SELECT DISTINCT ST_AsGeoJSON(h.converted_way) AS hospital, ST_DWithin(f.flood_point, h.converted_way, ?/111139.0) AS endangered, f.id as f_id, ST_AsGeoJSON(f.flood_point) as flood_point_json '
+            . 'SELECT DISTINCT ST_AsGeoJSON(h.converted_way) AS hospital, ST_DWithin(f.flood_point, h.converted_way, ?/111139.0) AS endangered, h.id AS hospital_id '
             .'FROM tmp_floods f RIGHT JOIN hospitals_polygon h ON ST_DWithin(f.flood_point, h.converted_way, ?/111139.0)'
             .'JOIN cities_polygon c ON ST_Contains(c.converted_way, h.converted_way) '
             .'WHERE c.id = ?;',
@@ -47,15 +47,21 @@ class MapsController extends Controller
     }
 
     public function cities() {
-        // $cities = DB::select('select ST_AsGeoJSON(ST_Transform(way, 4326)) from planet_osm_polygon where place = ?', ['town']);
-        $cities = DB::select('SELECT ST_AsGeoJSON(converted_way), id FROM cities_polygon LIMIT 50');
+        $limit = request()->limit;
+        $offset = request()->offset; 
+        $cities = DB::select('SELECT ST_AsGeoJSON(converted_way), id FROM cities_polygon LIMIT ? OFFSET ?', [$limit, $offset]);
         return response()->json($cities);
     }
 
-    public function test() {
-        // $test = DB::select('select ST_AsGeoJSON(ST_MakePoint(?, ?))', ['50.996535', '-2.583975']);
-        // $test = DB::select('SELECT DISTINCT ST_AsGeoJSON(grid.converted_way) AS cities, ST_AsGeoJSON(pts.geom) AS floods FROM minimal_floods AS pts, cities_polygon grid WHERE ST_Contains(grid.converted_way, pts.geom) LIMIT 20');
-        $test = DB::select('SELECT ST_AsGeoJSON(pts.city_way) AS cities FROM medium_floods_cities AS pts LIMIT 100');
-        return response()->json($test);
+    public function floodsForHospital() {
+        $hospitalId = request()->hospitalId;
+        $diameter = request()->safeZoneDiameter;
+        $floods = DB::select(
+            'SELECT DISTINCT f.id as f_id, ST_AsGeoJSON(f.geom) AS flood_point_json '
+            .'FROM floods f JOIN hospitals_polygon h ON ST_DWithin(f.geom, h.converted_way, ?/111139.0) '
+            .'WHERE h.id = ? AND f.prob = ?',
+            [$diameter, $hospitalId, 'High']
+        );
+        return response()->json($floods);
     }
 }
