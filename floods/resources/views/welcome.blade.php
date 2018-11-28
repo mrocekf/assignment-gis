@@ -90,13 +90,14 @@
     <script>
     $( document ).ready(function() {
         console.log( "ready!" );
-        var mymap = L.map('mapid').setView([51.505, -0.09], 5);
+        var mymap = L.map('mapid').setView([51.505, -0.09], 8);
         L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1Ijoic3JuaWFrIiwiYSI6ImNqb3UybW95ejBiM2MzcHM1dzV2YmJxdTAifQ.mVE4Vn_nAB72-rdboaksHA', {
             attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
             maxZoom: 18,
             id: 'mapbox.streets',
             accessToken: 'your.mapbox.access.token'
         }).addTo(mymap);
+        L.control.scale().addTo(mymap);
         
         // var marker = L.marker([51.5, -0.09]).addTo(mymap);
 
@@ -116,24 +117,83 @@
         // marker.bindPopup("<b>Hello world!</b><br>I am a popup.").openPopup();
         // circle.bindPopup("I am a circle.");
         // polygon.bindPopup("I am a polygon.");
+        const diameterSafeZone = 3000;
+        function whenClicked(e) {
+                    // e = event
+                    const id = e.target.feature.properties.id;
+            console.log(id);
+            getFloods(id);
+            getHospitals(id, diameterSafeZone);
+        // You can make your ajax call declaration here
+        //$.ajax(... 
+        }
+        let i = 0;
 
-        $('#testBtn').click(function() {
-            $.get("api/test", function(data) {
+        function getFloods(cityId) {
+            console.log('getting floods for ' + cityId);
+            $.get("api/floods/" + cityId, function(data) {
                 console.log( data );
-                
+                let coords = [];
                 data.map((el) => {
-                    let geoJsonCities = JSON.parse(el.cities);
-                    L.geoJson(geoJsonCities).addTo(mymap);
+                    // L.marker([parseFloat(el.latitude), parseFloat(el.longtitude)]).addTo(mymap);
+                    let geoJson = JSON.parse(el.st_asgeojson); 
+                    let prob = el.prob.toString();
+                    console.log(prob);
+                    var geojsonMarkerOptions = {
+                        radius: 8,
+                        fillColor: prob == 'Low' ? '#0099ff' : prob == 'Medium' ? '#ffdb4d' : '#ff5c33',
+                        color: "#000",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    };
+                    L.geoJson(geoJson, {
+                        pointToLayer: function (feature, latlng) {
+                            return L.circleMarker(latlng, geojsonMarkerOptions);
+                        }
+                    }).addTo(mymap);
 
-                    // let geoJsonFloods = JSON.parse(el.floods);  
-                    // L.geoJson(geoJsonFloods).addTo(mymap);
+                    // if (prob == 'High') {
+                    //     L.circle([geoJson.coordinates[1], geoJson.coordinates[0]], {
+                    //         color: 'red',
+                    //         fillColor: '#f03',
+                    //         fillOpacity: 0.5,
+                    //         radius: diameterSafeZone
+                    //     }).addTo(mymap);
+                    // }
 
-                })
-                // console.log(geoJson);
-                
-                // var marker = L.marker(geoJson.coordinates).addTo(mymap);
+                });
+
             });
-        });
+        }
+
+        function getHospitals($id, $safeZoneDiameter) {
+            $.get("api/hospitals/" + $id + '?safeZoneDiameter=' + $safeZoneDiameter, function(data) {
+                console.log( data );
+                data.map((el) => {
+                    let geoJsonCities = JSON.parse(el.hospital);
+                    let endangered = el.endangered;
+                    L.geoJson(geoJsonCities, { style: {color: endangered == null ? 'green' : 'red'}}).addTo(mymap);
+                })
+            });
+        }
+        function onEachFeature(feature, layer) {
+            layer.feature.properties.id = id;
+            console.log('##feat', layer.feature.properties.id);
+            layer.on({
+                click: whenClicked
+            });
+        }
+
+        // $('#testBtn').click(function() {
+        //     $.get("api/hospitals/" + , function(data) {
+        //         console.log( data );
+        //         data.map((el) => {
+        //             let geoJsonCities = JSON.parse(el.st_asgeojson);
+        //             L.geoJson(geoJsonCities).addTo(mymap);
+        //         })
+        //     });
+        // });
 
          $('#floodsBtn').click(function() {
             $.get("api/floods", function(data) {
@@ -147,15 +207,18 @@
 
             });
         });
-
+        let id;
         $('#citiesBtn').click(function() {  
             $.get("api/cities", function(data) {
                 // console.log( data );
                 // console.log(JSON.parse(data[0].st_asgeojson));
                 data.map((el) => {
+                    // let parsed = JSON.parse(el);
                     let geoJson = JSON.parse(el.st_asgeojson);
+                    id = JSON.parse(el.id).toString();
                     // console.log(geoJson);
-                    L.geoJson(geoJson).addTo(mymap);
+                    L.geoJson(geoJson, {onEachFeature: onEachFeature}).addTo(mymap);
+                    // console.log(ele);
                     // L.polygon(L.geoJSON().coordsToLatLng(JSON.parse(el.st_asgeojson).coordinates)).addTo(mymap);
                     // return JSON.parse(el.st_asgeojson).coordinates;
                 });
