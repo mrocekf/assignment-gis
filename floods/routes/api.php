@@ -21,6 +21,4 @@ Route::get('/floods-for-hospital', 'MapsController@floodsForHospital');
 Route::get('/hospitals/{cityId}', 'MapsController@hospitals');
 Route::get('/floods/{cityId}', 'MapsController@floods');
 Route::get('/cities', 'MapsController@cities');
-
-
-Route::get('/ports-of-landing', 'MapsController@portsOfLanding');
+Route::get('/closest-safe-hospital', 'MapsController@closestSafeHospital');

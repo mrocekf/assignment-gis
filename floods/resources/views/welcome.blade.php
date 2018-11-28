@@ -6,13 +6,21 @@
 
         <title>Laravel</title>
 
+        <!-- leafleet CSS -->
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.4/dist/leaflet.css"
             integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA=="
             crossorigin=""/>
 
+        <!-- routing module CSS -->
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.2.0/dist/leaflet.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+
         <!-- Fonts -->
         <link href="https://fonts.googleapis.com/css?family=Nunito:200,600" rel="stylesheet" type="text/css">
 
+        <!-- Bootstrap -->
+        <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet" type="text/css">
+        
         <!-- Styles -->
         <style>
             html, body {
@@ -23,55 +31,65 @@
                 height: 100vh;
                 margin: 0;
             }
-
-            .full-height {
-                height: 100vh;
-            }
-
-            .flex-center {
-                align-items: center;
+            #spinner {
+                position: fixed;
+                color: white;
+                width: 100%;
+                height: 100%;
                 display: flex;
+                flex-direction: column;
                 justify-content: center;
+                align-items: center;
+                z-index: 100000;
+                background: rgba(10, 10, 10, .80);
+                font-size: 28px;
+                visibility: hidden;
             }
-
-            .position-ref {
-                position: relative;
+            #mapid { height: 100%; }
+            .container-fluid {
+                padding-top: 15px;
             }
-
-            .top-right {
-                position: absolute;
-                right: 10px;
-                top: 18px;
+            #spinner > .progress {
+                width: 500px;
             }
-
-            .content {
-                text-align: center;
-            }
-
-            .title {
-                font-size: 84px;
-            }
-
-            .links > a {
-                color: #636b6f;
-                padding: 0 25px;
-                font-size: 13px;
-                font-weight: 600;
-                letter-spacing: .1rem;
-                text-decoration: none;
-                text-transform: uppercase;
-            }
-
-            .m-b-md {
-                margin-bottom: 30px;
-            }
-
-            #mapid { height: 800px; }
         </style>
     </head>
     <body>
-        <input type="number" id="safe-radius" value="2000" min="0" max="100000">
-        <div id="mapid"></div>
+        <div id="spinner">
+            <div>Mapa sa načítava...</div>
+            <div class="progress">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"></div>
+            </div>
+        </div>
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-md-12 text-center" style="margin-bottom: 30px;">
+                    <h1>Regióny Anglicka, povodňové nebezpečenstvo a ohrozenie nemocníc</h1>
+                </div>
+                <div class="col-md-8" style="height: 80vh;">
+                    <h3>Mapová časť</h3>
+                    <div id="mapid"></div>
+                </div>
+                <div class="col-md-4">
+                    <h3>Ovládacie prvky</h3>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="exampleInputEmail1">Veľkosť bezpečnej oblasti [m]</label>
+                            <input type="number" class="form-control" id="safe-radius" value="2000" min="0" max="100000" placeholder="Veľkosť bezpečnej oblasti [m]" required>
+                        </div>
+                        <button type="button" id="refresh-map" class="btn btn-primary">Obnoviť mapu</button>
+                    </div>
+
+                    <hr>
+
+                    <div class="col-md-12" style="overflow: auto; height: 60vh;">
+                        <div id="stats">
+                        </div>
+                    </div>
+                </div>
+            </div> 
+        </div>
+        
     </body>
      <!-- Make sure you put this AFTER Leaflet's CSS -->
     <script src="https://unpkg.com/leaflet@1.3.4/dist/leaflet.js"
@@ -86,6 +104,28 @@
 
     <script>
     $( document ).ready(function() {
+        let isLoading = false;
+        function setIsLoading(value) {
+            isLoading = value;
+            $('#spinner').css('visibility', isLoading == true ? 'visible' : 'hidden' );
+        }
+        $( document ).ajaxStart(function() {
+            setIsLoading(true);
+        });
+
+        $( document ).ajaxStop(function() {
+            setIsLoading(false);
+        });
+
+        function addStats(intro, text) {
+            $("#stats").append(`<div><span class="font-weight-bold">${intro}:</span> ${text}</div>`);
+        }
+
+        function clearStats() {
+            $("#stats > *").remove();
+            addStats('Vykreslené regióny', citiesCount);
+        }
+
         console.log( "ready!" );
         var mymap = L.map('mapid').setView([52.68, -1.95], 7);
         L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1Ijoic3JuaWFrIiwiYSI6ImNqb3UybW95ejBiM2MzcHM1dzV2YmJxdTAifQ.mVE4Vn_nAB72-rdboaksHA', {
@@ -95,8 +135,10 @@
             accessToken: 'your.mapbox.access.token'
         }).addTo(mymap);
         L.control.scale().addTo(mymap);
+
         getCities(115, 0);
         
+        let citiesCount = 0;
         let diameterSafeZone = 2000;
         let i = 0;
 
@@ -106,25 +148,59 @@
         let showingFloodsForHospitalId;
         let showingCityId;
 
+        let routeControl;
+
         $('#safe-radius').on('input', function (e) {
             diameterSafeZone = e.currentTarget.value;
+        });
+
+        $('#refresh-map').on('click', function (e) {
+            if (mymap.hasLayer(floodsAndHospitalsGroup)) {
+                mymap.removeLayer(floodsAndHospitalsGroup);
+                if (mymap.hasLayer(endangeringFloodsGroup)) {
+                    mymap.removeLayer(endangeringFloodsGroup);
+                }
+                if (routeControl != null) {
+                    routeControl.getPlan().setWaypoints([]);
+                }
+            }
+            getFloods(showingCityId);
+            getHospitals(showingCityId, diameterSafeZone);
         });
 
         function getCities(limit, offset) {
             $.get("api/cities?limit=" + limit + '&offset=' + offset, function(data) {
                 const count = data.length;
                 if (count > 0) {
+                    citiesCount+=count;
                     data.map((el) => {
                         let geoJson = JSON.parse(el.st_asgeojson);
-                        id = JSON.parse(el.id).toString();
+                        id = el.id;
+                        name = el.name;
                         L.geoJson(
                             geoJson, 
                             {
                                 onEachFeature: (feature, layer) => {
                                     layer.feature.properties.id = id;
+                                    layer.feature.properties.name = name;
                                     layer.on({
                                         click: (e) => {
                                             const id = e.target.feature.properties.id;
+                                            const name = e.target.feature.properties.name;
+                                            if (showingCityId == id) {
+                                                return;
+                                            }
+                                            if (mymap.hasLayer(floodsAndHospitalsGroup)) {
+                                                mymap.removeLayer(floodsAndHospitalsGroup);
+                                                if (mymap.hasLayer(endangeringFloodsGroup)) {
+                                                    mymap.removeLayer(endangeringFloodsGroup);
+                                                }
+                                                if (routeControl != null) {
+                                                    routeControl.getPlan().setWaypoints([]);
+                                                } 
+                                            }
+                                            showingCityId = id;
+                                            addStats('Zobrazený región', name);
                                             getFloods(id);
                                             getHospitals(id, diameterSafeZone);
                                             mymap.fitBounds(e.target.getBounds());
@@ -135,30 +211,25 @@
                         ).addTo(mymap);
                     });
 
-                    // getCities(limit, offset + limit);
+                    getCities(limit, offset + limit);
+                } else {
+                    clearStats();
                 }
                 
             });
         }
 
         function getFloods(cityId) {
-            if (mymap.hasLayer(floodsAndHospitalsGroup)) {
-                mymap.removeLayer(floodsAndHospitalsGroup);
-                if (mymap.hasLayer(endangeringFloodsGroup)) {
-                    mymap.removeLayer(endangeringFloodsGroup);
-                }
-            }
-
-            if (showingCityId == cityId) {
-                showingCityId = null;
-                showingFloodsForHospitalId = null;
-                return;
-            }
             $.get("api/floods/" + cityId, function(data) {
                 floodsAndHospitalsGroup = L.featureGroup();
+                addStats('Zaznamenané povodne pre región', data.length + 'x');
+                let highProbCount = 0;
                 data.map((el) => {
                     let geoJson = JSON.parse(el.st_asgeojson); 
                     let prob = el.prob.toString();
+                    if (prob == 'High') {
+                        highProbCount++;
+                    }
                     var geojsonMarkerOptions = {
                         radius: 8,
                         fillColor: prob == 'Low' ? '#0099ff' : prob == 'Medium' ? '#ffdb4d' : '#ff5c33',
@@ -174,15 +245,21 @@
                     }).addTo(floodsAndHospitalsGroup);
                     mymap.addLayer(floodsAndHospitalsGroup);
                 });
+                addStats('Z toho veľká pravdepodobnosť povodne', highProbCount + 'x');
             });
         }
 
         function getHospitals(id, safeZoneDiameter) {
             $.get("api/hospitals/" + id + '?safeZoneDiameter=' + safeZoneDiameter, function(data) {
+                addStats('Nemocnice v regióne', data.length);
+                let endangeredCount = 0;
                 data.map((el) => {
                     const geoJsonCities = JSON.parse(el.hospital);
                     const endangered = el.endangered;
                     id = el.hospital_id;
+                    if (endangered) {
+                        endangeredCount++;
+                    }
                     var polygon = L.geoJson(
                         geoJsonCities, 
                         { 
@@ -193,6 +270,7 @@
                                     click: (e) => {
                                         const id = e.target.feature.properties.id;
                                         getFloodsForHospital(id, diameterSafeZone);
+                                        getClosestSafeHospital(showingCityId, diameterSafeZone, id);
                                     }
                                 });
                             }
@@ -208,6 +286,7 @@
                     }).addTo(floodsAndHospitalsGroup)
                     mymap.addLayer(floodsAndHospitalsGroup);
                 });
+                addStats('Z toho ohrozené vysokou pravdepodobnosťou povodne', endangeredCount);
             });
         }
         
@@ -239,7 +318,33 @@
             });
         }
 
+        function getClosestSafeHospital(cityId, diameter, hospitalId) {
+            if (routeControl != null) {
+                routeControl.getPlan().setWaypoints([]);
+            } 
+            $.get("api/closest-safe-hospital/?cityId=" + cityId + '&safeZoneDiameter=' + diameter + '&hospitalId=' + hospitalId, function(data) {
+                if (data.length > 0) {
+                    $('#stats').append(`<div class="alert alert-success">Našla sa nemocnica, ktorá je v bezpečí.</div>`);
+                    const el = data[0];
+                    const closestHospital = JSON.parse(el.closest_hospital);
+                    const endangeredHospital = JSON.parse(el.endangered_hospital);
+                    const distance = JSON.parse(el.distance);
+                    routeControl = L.Routing.control({
+                        waypoints: [
+                            L.latLng(endangeredHospital.coordinates[1], endangeredHospital.coordinates[0]),
+                            L.latLng(closestHospital.coordinates[1], closestHospital.coordinates[0])
+                        ]
+                    }).addTo(mymap);
+                } else {
+                    $('#stats').append(`<div class="alert alert-danger">V danom regióne sa nenachádza nemocnica, ktorá je v bezpečí.</div>`);
+                }
+            });
+
+        }
     });
     
     </script>
+    <!-- Routing JS -->
+    <script src="https://unpkg.com/leaflet@1.2.0/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 </html>
