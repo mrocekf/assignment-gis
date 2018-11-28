@@ -22,7 +22,7 @@ class MapsController extends Controller
         // $floods = DB::select('select latitude, longtitude from floods WHERE prob = ? ORDER BY fid LIMIT 500', ['High']);
         // $floods = DB::select('select ST_AsGeoJSON(geom) from relevant_floods WHERE prob = ? ORDER BY fid LIMIT 500', ['High']);
         $floods = DB::select(
-            'SELECT ST_AsGeoJSON(geom), prob FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom) WHERE c.id = ? AND f.prob != ?',
+            'SELECT ST_AsGeoJSON(geom), prob, osm_id FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom) WHERE c.id = ? AND f.prob != ?',
             [$cityId, 'None']
         );
         return response()->json($floods);
@@ -36,8 +36,8 @@ class MapsController extends Controller
         // );
         $hospitals = DB::select(
             'WITH tmp_floods AS ' 
-            .'(SELECT f.geom AS flood_point, f.prob FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom) WHERE c.id = ? AND f.prob = ?) '
-            . 'SELECT DISTINCT ST_AsGeoJSON(h.converted_way) AS hospital, ST_DWithin(f.flood_point, h.converted_way, ?/111139.0) AS endangered '
+            .'(SELECT f.geom AS flood_point, f.prob, f.id FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom) WHERE c.id = ? AND f.prob = ?) '
+            . 'SELECT DISTINCT ST_AsGeoJSON(h.converted_way) AS hospital, ST_DWithin(f.flood_point, h.converted_way, ?/111139.0) AS endangered, f.id as f_id, ST_AsGeoJSON(f.flood_point) as flood_point_json '
             .'FROM tmp_floods f RIGHT JOIN hospitals_polygon h ON ST_DWithin(f.flood_point, h.converted_way, ?/111139.0)'
             .'JOIN cities_polygon c ON ST_Contains(c.converted_way, h.converted_way) '
             .'WHERE c.id = ?;',

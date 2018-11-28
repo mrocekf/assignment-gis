@@ -171,9 +171,22 @@
             $.get("api/hospitals/" + $id + '?safeZoneDiameter=' + $safeZoneDiameter, function(data) {
                 console.log( data );
                 data.map((el) => {
-                    let geoJsonCities = JSON.parse(el.hospital);
-                    let endangered = el.endangered;
+                    const geoJsonCities = JSON.parse(el.hospital);
+                    const endangered = el.endangered;
+                    
                     L.geoJson(geoJsonCities, { style: {color: endangered == null ? 'green' : 'red'}}).addTo(mymap);
+
+                    if (endangered != null) {
+                        const circleCoords = JSON.parse(el.flood_point_json).coordinates;
+                        L.circle([circleCoords[1], circleCoords[0]], {
+                            color: 'red',
+                            fillColor: '#f03',
+                            fillOpacity: 0.1,
+                            radius: diameterSafeZone
+                        }).addTo(mymap);
+                    } 
+                    
+                    
                 })
             });
         }
