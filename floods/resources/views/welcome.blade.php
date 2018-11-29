@@ -136,7 +136,7 @@
         }).addTo(mymap);
         L.control.scale().addTo(mymap);
 
-        getCities(115, 0);
+        getCities(340, 0);
         
         let citiesCount = 0;
         let diameterSafeZone = 2000;
@@ -211,11 +211,11 @@
                         ).addTo(mymap);
                     });
 
-                    getCities(limit, offset + limit);
+                    // getCities(limit, offset + limit);
                 } else {
-                    clearStats();
+                    // clearStats();
                 }
-                
+                clearStats();
             });
         }
 
@@ -232,7 +232,7 @@
                     }
                     var geojsonMarkerOptions = {
                         radius: 8,
-                        fillColor: prob == 'Low' ? '#0099ff' : prob == 'Medium' ? '#ffdb4d' : '#ff5c33',
+                        fillColor: prob == 'Low' ? '#0099ff' : (prob == 'Medium') ? '#ffdb4d' : '#ff5c33',
                         color: "#000",
                         weight: 1,
                         opacity: 1,
@@ -329,12 +329,13 @@
                     const closestHospital = JSON.parse(el.closest_hospital);
                     const endangeredHospital = JSON.parse(el.endangered_hospital);
                     const distance = JSON.parse(el.distance);
-                    routeControl = L.Routing.control({
-                        waypoints: [
-                            L.latLng(endangeredHospital.coordinates[1], endangeredHospital.coordinates[0]),
-                            L.latLng(closestHospital.coordinates[1], closestHospital.coordinates[0])
-                        ]
-                    }).addTo(mymap);
+                    L.geoJson(closestHospital).addTo(mymap);
+                    // routeControl = L.Routing.control({
+                    //     waypoints: [
+                    //         L.latLng(endangeredHospital.coordinates[1], endangeredHospital.coordinates[0]),
+                    //         L.latLng(closestHospital.coordinates[1], closestHospital.coordinates[0])
+                    //     ]
+                    // }).addTo(mymap);
                 } else {
                     $('#stats').append(`<div class="alert alert-danger">V danom regióne sa nenachádza nemocnica, ktorá je v bezpečí.</div>`);
                 }
