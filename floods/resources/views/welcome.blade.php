@@ -72,10 +72,14 @@
                 </div>
                 <div class="col-md-4">
                     <h3>Ovládacie prvky</h3>
-                    <div class="col-md-6">
+                    <div class="col-md-10">
                         <div class="form-group">
                             <label for="exampleInputEmail1">Veľkosť bezpečnej oblasti [m]</label>
                             <input type="number" class="form-control" id="safe-radius" value="2000" min="0" max="100000" placeholder="Veľkosť bezpečnej oblasti [m]" required>
+                        </div>
+                        <div class="form-check" style="padding-bottom: 15px;">
+                            <input type="checkbox" class="form-check-input" id="show-route-chx">
+                            <label class="form-check-label" for="show-route-chx">Zobrazovať cestu k bezpečnej nemocnici</label>
                         </div>
                         <button type="button" id="refresh-map" class="btn btn-primary">Obnoviť mapu</button>
                     </div>
@@ -166,6 +170,12 @@
             }
             getFloods(showingCityId);
             getHospitals(showingCityId, diameterSafeZone);
+            if (showingFloodsForHospitalId != null) {
+                const hospId = showingFloodsForHospitalId;
+                showingFloodsForHospitalId = null;
+                getFloodsForHospital(hospId, diameterSafeZone);
+                getClosestSafeHospital(showingCityId, diameterSafeZone, hospId);
+            }
         });
 
         function getCities(limit, offset) {
@@ -269,6 +279,17 @@
                                 layer.on({
                                     click: (e) => {
                                         const id = e.target.feature.properties.id;
+                                        if (routeControl != null) {
+                                            routeControl.getPlan().setWaypoints([]);
+                                        } 
+                                        if (mymap.hasLayer(endangeringFloodsGroup)) {
+                                            mymap.removeLayer(endangeringFloodsGroup);
+                                        }
+
+                                        if (showingFloodsForHospitalId == id) {
+                                            showingFloodsForHospitalId = null;
+                                            return;
+                                        }
                                         getFloodsForHospital(id, diameterSafeZone);
                                         getClosestSafeHospital(showingCityId, diameterSafeZone, id);
                                     }
@@ -290,16 +311,7 @@
             });
         }
         
-        function getFloodsForHospital(hospitalId, safeZoneDiameter) {
-            if (mymap.hasLayer(endangeringFloodsGroup)) {
-                mymap.removeLayer(endangeringFloodsGroup);
-            }
-
-            if (showingFloodsForHospitalId == hospitalId) {
-                showingFloodsForHospitalId = null;
-                return;
-            }
-            
+        function getFloodsForHospital(hospitalId, safeZoneDiameter) {            
             $.get("api/floods-for-hospital/?hospitalId=" + hospitalId + '&safeZoneDiameter=' + safeZoneDiameter, function(data) {
                 showingFloodsForHospitalId = hospitalId;
 
@@ -319,9 +331,6 @@
         }
 
         function getClosestSafeHospital(cityId, diameter, hospitalId) {
-            if (routeControl != null) {
-                routeControl.getPlan().setWaypoints([]);
-            } 
             $.get("api/closest-safe-hospital/?cityId=" + cityId + '&safeZoneDiameter=' + diameter + '&hospitalId=' + hospitalId, function(data) {
                 if (data.length > 0) {
                     $('#stats').append(`<div class="alert alert-success">Našla sa nemocnica, ktorá je v bezpečí.</div>`);
@@ -329,13 +338,15 @@
                     const closestHospital = JSON.parse(el.closest_hospital);
                     const endangeredHospital = JSON.parse(el.endangered_hospital);
                     const distance = JSON.parse(el.distance);
-                    L.geoJson(closestHospital).addTo(mymap);
-                    // routeControl = L.Routing.control({
-                    //     waypoints: [
-                    //         L.latLng(endangeredHospital.coordinates[1], endangeredHospital.coordinates[0]),
-                    //         L.latLng(closestHospital.coordinates[1], closestHospital.coordinates[0])
-                    //     ]
-                    // }).addTo(mymap);
+                    L.geoJson(closestHospital).addTo(floodsAndHospitalsGroup);
+                    if ($('#show-route-chx').is(":checked")) {
+                        routeControl = L.Routing.control({
+                            waypoints: [
+                                L.latLng(endangeredHospital.coordinates[1], endangeredHospital.coordinates[0]),
+                                L.latLng(closestHospital.coordinates[1], closestHospital.coordinates[0])
+                            ]
+                        }).addTo(mymap);
+                    }
                 } else {
                     $('#stats').append(`<div class="alert alert-danger">V danom regióne sa nenachádza nemocnica, ktorá je v bezpečí.</div>`);
                 }
