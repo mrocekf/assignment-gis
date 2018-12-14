@@ -58,3 +58,68 @@ Information about floods are taken from [kaggle](https://www.kaggle.com/gettheda
 ### Response
 
 API calls return geojson with geometry data, and additional information (such as count, distance, ...) if needed.
+
+# Usecases
+
+Here I describe usecases:
+
+## UC1 Show flood probability for selected region
+Filter those flood points, which are inside selected region. You can select region by clicking on it.  
+Red circle - flood point with 'High' flood probability.  
+Orange circle - flood point with 'Medium' flood probability.  
+Blue circle - flood point with 'Low' flood probability.  
+
+**Query**
+
+`SELECT ST_AsGeoJSON(geom), prob`  
+`FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom)`  
+`WHERE c.id = $cityId AND f.prob != 'None' AND f.prob != 'Very Low';`
+
+**Screenshot**
+![Screenshot](UC1.png)
+
+## UC2 Show hospitals for selected region and information wether they are endangered by dangerous flood.
+Filter those hospitals, which are inside selected region and are endagered by flood, which has 'High' probabilty. Safe hospitals (which are not in selected radius from any dangerous flood) are shown as green, endangered hospirals are shown as red. Hospitals are inside a circle, so that they can be found more easily on the map.
+
+**Query**
+
+`WITH floods_in_city AS`  
+&nbsp;&nbsp;&nbsp;&nbsp;`(SELECT f.geom AS flood_point, f.prob, f.id FROM floods as f`  
+&nbsp;&nbsp;&nbsp;&nbsp;`JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom)`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = $cityId AND f.prob = 'High')`  
+`SELECT DISTINCT ST_AsGeoJSON(h.converted_way) AS hospital, ST_DWithin(f.flood_point::geography, h.converted_way::geography, $diameter) AS endangered, h.id AS hospital_id`  
+&nbsp;&nbsp;&nbsp;&nbsp;`FROM floods_in_city f RIGHT JOIN hospitals_polygon h`  
+&nbsp;&nbsp;&nbsp;&nbsp;`ON ST_DWithin(f.flood_point::geography, h.converted_way::geography, $diameter)`  
+&nbsp;&nbsp;&nbsp;&nbsp;`JOIN cities_polygon c ON ST_Contains(c.converted_way, h.converted_way)`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = $cityId;`
+
+**Screenshot**
+![Screenshot](UC2.png)
+
+## UC3 Show dangerous flood points which endanger selected hospital and find closest safe hospital in selected region.
+Filter those flood points, which are inside selected region and are endagering any hospital, and have 'High' probabilty. Also find closest hospitals in selected region, which are safe. Route to closest safe hospital is not done on DB level.  
+
+**Query 1 - Find flood points**
+
+`SELECT f.id as f_id, ST_AsGeoJSON(f.geom) AS flood_point_json FROM floods f`  
+`JOIN hospitals_polygon h ON ST_DWithin(f.geom::geography, h.converted_way::geography, $diameter)`  
+`WHERE h.id = $hospitalId AND f.prob = 'High';`
+
+**Query 2 - Find closest safe hospital**
+
+`WITH tmp_floods AS `  
+&nbsp;&nbsp;&nbsp;&nbsp;`(SELECT DISTINCT f.geom AS flood_point, f.prob, f.id`  
+&nbsp;&nbsp;&nbsp;&nbsp;`FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom)`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = ? AND f.prob = ?),`  
+&nbsp;&nbsp;&nbsp;&nbsp;`tmp_hospitals AS (SELECT DISTINCT h.osm_id, h.converted_way, h.id FROM hospitals_polygon h`  
+&nbsp;&nbsp;&nbsp;&nbsp;`JOIN cities_polygon c ON ST_Contains(c.converted_way, h.converted_way)`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = ?),`  
+&nbsp;&nbsp;&nbsp;&nbsp;`endangered_hospitals AS (SELECT DISTINCT h.id FROM tmp_floods f, tmp_hospitals h`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE ST_DWithin(f.flood_point::geography, h.converted_way::geography, ?)),`  
+&nbsp;&nbsp;&nbsp;&nbsp;`the_hospital AS (SELECT converted_way FROM tmp_hospitals WHERE id = ?)`  
+`SELECT h.osm_id, ST_AsGeoJSON(ST_Centroid(h.converted_way)) AS closest_hospital, ST_AsGeoJSON(ST_Centroid(t.converted_way)) AS endangered_hospital, ST_Distance(h.converted_way::geography, t.converted_way::geography) AS distance`  
+&nbsp;&nbsp;&nbsp;&nbsp;`FROM tmp_hospitals h, the_hospital t WHERE h.id NOT IN (SELECT id FROM endangered_hospitals) ORDER BY distance LIMIT 1';`
+
+
+**Screenshot**
+![Screenshot](UC3.png)
