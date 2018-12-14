@@ -69,17 +69,23 @@ Red circle - flood point with 'High' flood probability.
 Orange circle - flood point with 'Medium' flood probability.  
 Blue circle - flood point with 'Low' flood probability.  
 
+**Screenshot**  
+![Screenshot](UC1.png)
+
 **Query**
 
 `SELECT ST_AsGeoJSON(geom), prob`  
 `FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom)`  
 `WHERE c.id = $cityId AND f.prob != 'None' AND f.prob != 'Very Low';`
 
-**Screenshot**
-![Screenshot](UC1.png)
+**Explain**  
+![Screenshot](expUC_1.png)  
 
 ## UC2 Show hospitals for selected region and information wether they are endangered by dangerous flood.
 Filter those hospitals, which are inside selected region and are endagered by flood, which has 'High' probabilty. Safe hospitals (which are not in selected radius from any dangerous flood) are shown as green, endangered hospirals are shown as red. Hospitals are inside a circle, so that they can be found more easily on the map.
+
+**Screenshot**
+![Screenshot](UC2.png)
 
 **Query**
 
@@ -93,11 +99,15 @@ Filter those hospitals, which are inside selected region and are endagered by fl
 &nbsp;&nbsp;&nbsp;&nbsp;`JOIN cities_polygon c ON ST_Contains(c.converted_way, h.converted_way)`  
 &nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = $cityId;`
 
-**Screenshot**
-![Screenshot](UC2.png)
+**Explain**  
+![Screenshot](expUC_2.png)  
 
 ## UC3 Show dangerous flood points which endanger selected hospital and find closest safe hospital in selected region.
 Filter those flood points, which are inside selected region and are endagering any hospital, and have 'High' probabilty. Also find closest hospitals in selected region, which are safe. Route to closest safe hospital is not done on DB level.  
+
+
+**Screenshot**
+![Screenshot](UC3.png)
 
 **Query 1 - Find flood points**
 
@@ -105,21 +115,24 @@ Filter those flood points, which are inside selected region and are endagering a
 `JOIN hospitals_polygon h ON ST_DWithin(f.geom::geography, h.converted_way::geography, $diameter)`  
 `WHERE h.id = $hospitalId AND f.prob = 'High';`
 
+**Explain**  
+![Screenshot](expUC_3-1.png)  
+
 **Query 2 - Find closest safe hospital**
 
 `WITH tmp_floods AS `  
 &nbsp;&nbsp;&nbsp;&nbsp;`(SELECT DISTINCT f.geom AS flood_point, f.prob, f.id`  
 &nbsp;&nbsp;&nbsp;&nbsp;`FROM floods as f JOIN cities_polygon as c ON ST_Contains(c.converted_way, f.geom)`  
-&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = ? AND f.prob = ?),`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = $cityId AND f.prob = 'High'),`  
 &nbsp;&nbsp;&nbsp;&nbsp;`tmp_hospitals AS (SELECT DISTINCT h.osm_id, h.converted_way, h.id FROM hospitals_polygon h`  
 &nbsp;&nbsp;&nbsp;&nbsp;`JOIN cities_polygon c ON ST_Contains(c.converted_way, h.converted_way)`  
-&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = ?),`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE c.id = $cityId),`  
 &nbsp;&nbsp;&nbsp;&nbsp;`endangered_hospitals AS (SELECT DISTINCT h.id FROM tmp_floods f, tmp_hospitals h`  
-&nbsp;&nbsp;&nbsp;&nbsp;`WHERE ST_DWithin(f.flood_point::geography, h.converted_way::geography, ?)),`  
-&nbsp;&nbsp;&nbsp;&nbsp;`the_hospital AS (SELECT converted_way FROM tmp_hospitals WHERE id = ?)`  
+&nbsp;&nbsp;&nbsp;&nbsp;`WHERE ST_DWithin(f.flood_point::geography, h.converted_way::geography, $diameter)),`  
+&nbsp;&nbsp;&nbsp;&nbsp;`the_hospital AS (SELECT converted_way FROM tmp_hospitals WHERE id = $hospitalId)`  
 `SELECT h.osm_id, ST_AsGeoJSON(ST_Centroid(h.converted_way)) AS closest_hospital, ST_AsGeoJSON(ST_Centroid(t.converted_way)) AS endangered_hospital, ST_Distance(h.converted_way::geography, t.converted_way::geography) AS distance`  
-&nbsp;&nbsp;&nbsp;&nbsp;`FROM tmp_hospitals h, the_hospital t WHERE h.id NOT IN (SELECT id FROM endangered_hospitals) ORDER BY distance LIMIT 1';`
+&nbsp;&nbsp;&nbsp;&nbsp;`FROM tmp_hospitals h, the_hospital t WHERE h.id NOT IN (SELECT id FROM endangered_hospitals) ORDER BY distance LIMIT 1;`
 
+**Explain**  
+![Screenshot](expUC_3-2.png)  
 
-**Screenshot**
-![Screenshot](UC3.png)
