@@ -10,7 +10,7 @@ My application displays regions of England. Most important features are:
 
 
 
-![Screenshot](screenshot_1.png)
+![Screenshot](sc_1.png)
 
 The application has 2 separate parts, the client which is a [frontend web application](#frontend) using [leaflet.js](https://leafletjs.com/) and [jQuery](https://jquery.com/). The [backend application](#backend) is written in [Laravel](https://laravel.com/), backed by PostGIS. The frontend application communicates with backend using a [REST API](#api).
 
